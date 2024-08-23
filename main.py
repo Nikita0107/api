@@ -15,13 +15,12 @@ async def lifespan(app: FastAPI):
 
 # Создаем экземпляр FastAPI с указанным жизненным циклом и настройками документации
 app = FastAPI(
-    title="Nika",
-    description="Апи сохраняет картинку в БД и на локальный сервер. Извлекает текс с картинки в БД. Удаляет по id записи с БД и картинку с сервера!",
+    title="Обработка документов API",
+    description="API для загрузки, анализа и извлечения документов!",
     version="1.0.0",
+    openapi_url="/api/swagger.json",
     lifespan=lifespan
 )
 
 # Добавляем роутер
 app.include_router(router_doc)
-
-

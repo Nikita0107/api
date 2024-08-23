@@ -8,43 +8,64 @@ import uuid
 import sqlalchemy as sa
 from schemas import DocumentResponse, DocumentTextsResponse, DocumentTextResponse
 
-router = APIRouter()
+router = APIRouter(tags=['Задачи'])
 
 # Каталог для хранения загруженных документов
 DOCUMENTS_DIR = "documents"
 os.makedirs(DOCUMENTS_DIR, exist_ok=True)
 
 
-@router.post('/upload_doc', response_model=DocumentResponse, summary="Загрузить картинку",
-             description="Загрузите картинку с текстом на сервер. Размер должен быть меньше 2 МБ")
+# Определение конечной точки API с документацией Swagger
+@router.post('/upload_doc', response_model=DocumentResponse, summary='Загрузить картинку',
+             description='Загрузите картинку с текстом на сервер. Размер должен быть меньше 2 МБ')
 async def document_upload(file: UploadFile = File(...)):
-    file.file.seek(0, 2)  # Перемещаем указатель в конец файла
-    file_size = file.file.tell()  # Получаем размер файла
-    await file.seek(0)  # Возвращаем указатель в начало файла
-    if file_size > 2 * 1024 * 1024:  # Проверяем размер файла
+    """
+    Загрузка картинки с текстом на сервер.
+
+    Параметры:
+    - file (UploadFile): Файл изображения для загрузки
+
+    Возвращает:
+    - DocumentResponse: Объект, содержащий ID документа и имя файла
+    """
+    # Проверка размера файла
+    file.file.seek(0, 2)  # Перемещение указателя в конец файла
+    file_size = file.file.tell()  # Получение размера файла
+    await file.seek(0)  # Возвращение указателя в начало файла
+    if file_size > 2 * 1024 * 1024:  # Проверка размера файла
         raise HTTPException(status_code=400, detail='большой размер файла')
 
-    unique_filename = f'{uuid.uuid4()}.{file.filename.split(".")[-1]}'  # Генерируем уникальное имя файла
+    # Генерация уникального имени файла
+    unique_filename = f'{uuid.uuid4()}.{file.filename.split(".")[-1]}'
 
-    async with new_session() as session:  # Создаем новую сессию в базе данных
-        async with session.begin():  # Начинаем транзакцию
-            document = Document(name=unique_filename, date=datetime.now(timezone.utc))  # Создаем новый документ
-            session.add(document)  # Добавляем документ в сессию
-            await session.flush()  # Записываем изменения в базу данных
+    async with new_session() as session:  # Создание новой сессии в базе данных
+        async with session.begin():  # Начало транзакции
+            document = Document(name=unique_filename, date=datetime.now(timezone.utc))  # Создание нового документа
+            session.add(document)  # Добавление документа в сессию
+            await session.flush()  # Запись изменений в базу данных
 
             file_path = os.path.join(DOCUMENTS_DIR, unique_filename)  # Полный путь к файлу
 
-            with open(file_path, 'wb') as buffer:  # Открываем файл для записи
-                shutil.copyfileobj(file.file, buffer)  # Копируем содержимое файла в буфер
+            with open(file_path, 'wb') as buffer:  # Открытие файла для записи
+                shutil.copyfileobj(file.file, buffer)  # Копирование содержимого файла в буфер
 
-            await session.commit()  # Завершаем транзакцию
+            await session.commit()  # Завершение транзакции
 
     return document
 
 
 @router.delete("/doc_delete/{doc_id}", summary="Удалить документ",
-               description="Удалить документ и связанные с ним текстовые записи из базы данных..")
+               description="Удалить документ и связанные с ним текстовые записи из базы данных.")
 async def delete_doc(doc_id: int):
+    """
+    Удаление документа и связанных с ним текстовых записей из базы данных.
+
+    Параметры:
+    - doc_id (int): ID документа
+
+    Возвращает:
+    - JSON: Сообщение об успешном удалении
+    """
     async with new_session() as session:
         try:
             async with session.begin():
@@ -60,7 +81,7 @@ async def delete_doc(doc_id: int):
                 # Удаляем запись из таблицы DocumentText
                 await session.execute(sa.delete(DocumentText).where(DocumentText.document_id == doc_id))
 
-            await session.commit()  # Завершаем транзакцию
+            await session.commit()  # Завершение транзакции
 
         except Exception as e:
             await session.rollback()  # Откатываем транзакцию в случае ошибки
@@ -76,6 +97,15 @@ async def delete_doc(doc_id: int):
 @router.post("/doc_analyse/{doc_id}", summary="Анализ документа",
              description="Запустить анализ извлечения текста в указанном документе.")
 async def analyze_doc(doc_id: int):
+    """
+    Запуск анализа извлечения текста в указанном документе.
+
+    Параметры:
+    - doc_id (int): ID документа
+
+    Возвращает:
+    - JSON: Сообщение об успешном начале анализа
+    """
     async with new_session() as session:
         document = await session.get(Document, doc_id)
         if not document:
@@ -90,6 +120,15 @@ async def analyze_doc(doc_id: int):
 @router.get('/get_text/{doc_id}', response_model=DocumentTextsResponse, summary='Получить извлеченный текст',
             description="Получить извлеченный текст, связанный с указанным документом.")
 async def get_text(doc_id: int):
+    """
+    Получение извлеченного текста, связанного с указанным документом.
+
+    Параметры:
+    - doc_id (int): ID документа
+
+    Возвращает:
+    - DocumentTextsResponse: Объект, содержащий ID документа и список извлеченных текстов
+    """
     async with new_session() as session:
         document_texts = await session.execute(
             sa.select(DocumentText).where(DocumentText.document_id == doc_id)
